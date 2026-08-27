@@ -1,0 +1,153 @@
+/* ------------------------------------------------------------------ */
+/* BIRYANI PALACE — design tokens                                      */
+/* fire + brass + wood + steam + darkness + warm light                 */
+/* ------------------------------------------------------------------ */
+
+@font-face {
+  font-family: 'Escape Memories';
+  src: url('/fonts/dt-escape-memories.woff2') format('woff2'),
+    url('/fonts/dt-escape-memories.otf') format('opentype'),
+    url('/fonts/dt-escape-memories.ttf') format('truetype');
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+}
+
+:root {
+  --color-ink: #0d0a07;
+  --color-charcoal: #1b1611;
+  --color-brown: #2c2115;
+  --color-brass: #b08d57;
+  --color-saffron: #d9a441;
+  --color-cream: #f0e7d6;
+  --color-cream-dim: rgba(240, 231, 214, 0.6);
+
+  --font-display: 'Escape Memories', 'Cormorant Garamond', Georgia, serif;
+  --font-sans: 'Avenir Next', 'Segoe UI', 'Helvetica Neue', Arial, sans-serif;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html {
+  background: var(--color-ink);
+}
+
+body {
+  margin: 0;
+  font-family: var(--font-sans);
+  color: var(--color-cream);
+  background: var(--color-ink);
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+}
+
+/* Lenis */
+html.lenis,
+html.lenis body {
+  height: auto;
+}
+
+.lenis.lenis-smooth {
+  scroll-behavior: auto !important;
+}
+
+.lenis.lenis-smooth [data-lenis-prevent] {
+  overscroll-behavior: contain;
+}
+
+.lenis.lenis-stopped {
+  overflow: hidden;
+}
+
+img,
+video {
+  max-width: 100%;
+  display: block;
+}
+
+::selection {
+  background: var(--color-brass);
+  color: var(--color-ink);
+}
+
+/* ------------------------------------------------------------------ */
+/* shared editorial pieces                                             */
+/* ------------------------------------------------------------------ */
+
+.eyebrow {
+  font-size: 0.65rem;
+  letter-spacing: 0.32em;
+  color: var(--color-brass);
+  margin: 0 0 1.4rem;
+  font-family: var(--font-sans);
+}
+
+.section-title {
+  font-family: var(--font-display);
+  font-weight: 400;
+  font-size: clamp(2.2rem, 5.5vw, 4.2rem);
+  line-height: 1.08;
+  letter-spacing: 0.03em;
+  margin: 0 0 2.5rem;
+  color: var(--color-cream);
+}
+
+.section-line {
+  font-family: var(--font-display);
+  font-size: clamp(1.25rem, 2.6vw, 1.8rem);
+  line-height: 1.5;
+  color: var(--color-cream-dim);
+  margin: 0;
+  max-width: 38rem;
+}
+
+.btn {
+  display: inline-block;
+  font-family: var(--font-sans);
+  font-size: 0.7rem;
+  letter-spacing: 0.3em;
+  padding: 1.05rem 2.4rem;
+  border: 1px solid var(--color-brass);
+  background: transparent;
+  color: var(--color-cream);
+  cursor: pointer;
+  text-decoration: none;
+  transition: background 0.45s ease, color 0.45s ease;
+}
+
+.btn:hover,
+.btn:focus-visible {
+  background: var(--color-brass);
+  color: var(--color-ink);
+}
+
+.btn--solid {
+  background: var(--color-brass);
+  color: var(--color-ink);
+}
+
+.btn--solid:hover,
+.btn--solid:focus-visible {
+  background: var(--color-saffron);
+}
+
+:focus-visible {
+  outline: 1px solid var(--color-saffron);
+  outline-offset: 3px;
+}
+
+/* ------------------------------------------------------------------ */
+/* reduced motion — quiet the film, keep it scrubbable but calm        */
+/* ------------------------------------------------------------------ */
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}

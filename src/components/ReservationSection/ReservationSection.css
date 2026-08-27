@@ -1,0 +1,102 @@
+.reservation {
+  padding: 10rem 1.5rem;
+  background: var(--color-charcoal, #1b1611);
+}
+
+.reservation__inner {
+  max-width: 46rem;
+  margin: 0 auto;
+}
+
+.reservation__eyebrow {
+  font-family: var(--font-sans, sans-serif);
+  font-size: 0.65rem;
+  letter-spacing: 0.32em;
+  color: var(--color-brass, #b08d57);
+  margin: 0 0 1.2rem;
+}
+
+.reservation__title {
+  font-family: var(--font-display, serif);
+  font-size: clamp(2.2rem, 5vw, 3.6rem);
+  font-weight: 400;
+  letter-spacing: 0.04em;
+  color: var(--color-cream, #f0e7d6);
+  margin: 0 0 3.5rem;
+}
+
+.reservation__form {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 2rem 2.5rem;
+}
+
+.reservation__field {
+  display: flex;
+  flex-direction: column;
+  gap: 0.6rem;
+}
+
+.reservation__field label {
+  font-family: var(--font-sans, sans-serif);
+  font-size: 0.6rem;
+  letter-spacing: 0.28em;
+  text-transform: uppercase;
+  color: rgba(240, 231, 214, 0.55);
+}
+
+.reservation__field input,
+.reservation__field select {
+  appearance: none;
+  background: transparent;
+  border: none;
+  border-bottom: 1px solid rgba(240, 231, 214, 0.25);
+  padding: 0.55rem 0;
+  font-family: var(--font-sans, sans-serif);
+  font-size: 0.95rem;
+  color: var(--color-cream, #f0e7d6);
+  border-radius: 0;
+  transition: border-color 0.4s ease;
+}
+
+.reservation__field input:focus,
+.reservation__field select:focus {
+  outline: none;
+  border-bottom-color: var(--color-brass, #b08d57);
+}
+
+.reservation__field input[type='date'],
+.reservation__field input[type='time'] {
+  color-scheme: dark;
+}
+
+.reservation__submit {
+  grid-column: 1 / -1;
+  margin-top: 1rem;
+}
+
+.reservation__confirmation {
+  border-top: 1px solid rgba(176, 141, 87, 0.4);
+  padding-top: 2.5rem;
+}
+
+.reservation__confirmation-line {
+  font-family: var(--font-display, serif);
+  font-size: clamp(1.4rem, 3vw, 2rem);
+  color: var(--color-cream, #f0e7d6);
+  margin: 0 0 0.8rem;
+}
+
+.reservation__confirmation-sub {
+  font-family: var(--font-sans, sans-serif);
+  font-size: 0.8rem;
+  letter-spacing: 0.08em;
+  color: rgba(240, 231, 214, 0.6);
+  margin: 0;
+}
+
+@media (max-width: 768px) {
+  .reservation__form {
+    grid-template-columns: 1fr;
+  }
+}

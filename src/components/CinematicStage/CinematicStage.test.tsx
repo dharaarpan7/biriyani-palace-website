@@ -29,7 +29,9 @@ import { CHAPTERS } from '../../data/chapters'
 // jsdom's <video> never loads media: hand the component the metadata it
 // waits for by stubbing duration and firing loadedmetadata on each clip.
 function loadAllClips(duration = 10): HTMLVideoElement[] {
-  const videos = Array.from(document.querySelectorAll('video.cinema__video'))
+  const videos = Array.from(
+    document.querySelectorAll<HTMLVideoElement>('video.cinema__video'),
+  )
   for (const video of videos) {
     Object.defineProperty(video, 'duration', { value: duration, configurable: true })
     act(() => {
@@ -96,7 +98,9 @@ describe('CinematicStage', () => {
     expect(screen.getByRole('heading', { name: 'BIRYANI PALACE' })).toBeInTheDocument()
     expect(screen.getByText('The art of waiting.')).toBeInTheDocument()
     // the first clip is the visible layer before any scroll
-    const videos = Array.from(document.querySelectorAll('video.cinema__video'))
+    const videos = Array.from(
+    document.querySelectorAll<HTMLVideoElement>('video.cinema__video'),
+  )
     expect(videos[0]).toHaveClass('is-active')
   })
 
@@ -115,7 +119,9 @@ describe('CinematicStage', () => {
     loadAllClips()
     updateProgress(0.5)
 
-    const videos = Array.from(document.querySelectorAll('video.cinema__video'))
+    const videos = Array.from(
+    document.querySelectorAll<HTMLVideoElement>('video.cinema__video'),
+  )
     expect(videos[2]).toHaveClass('is-active')
 
     const chapter = CHAPTERS[2]

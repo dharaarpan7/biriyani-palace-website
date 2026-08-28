@@ -3,15 +3,8 @@
 /* fire + brass + wood + steam + darkness + warm light                 */
 /* ------------------------------------------------------------------ */
 
-@font-face {
-  font-family: 'Escape Memories';
-  src: url('/fonts/dt-escape-memories.woff2') format('woff2'),
-    url('/fonts/dt-escape-memories.otf') format('opentype'),
-    url('/fonts/dt-escape-memories.ttf') format('truetype');
-  font-weight: 400;
-  font-style: normal;
-  font-display: swap;
-}
+/* The licensed 'Escape Memories' TTF was tried here and removed — the site
+   keeps its original Cormorant Garamond look by user preference. */
 
 :root {
   --color-ink: #0d0a07;
@@ -22,7 +15,7 @@
   --color-cream: #f0e7d6;
   --color-cream-dim: rgba(240, 231, 214, 0.6);
 
-  --font-display: 'Escape Memories', 'Cormorant Garamond', Georgia, serif;
+  --font-display: 'Cormorant Garamond', Georgia, serif;
   --font-sans: 'Avenir Next', 'Segoe UI', 'Helvetica Neue', Arial, sans-serif;
 }
 

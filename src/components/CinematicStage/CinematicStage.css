@@ -128,7 +128,9 @@
      overlapping copy from flashing before the timeline is ready. */
   opacity: 0;
   visibility: hidden;
-  font-family: var(--font-display, serif);
+  /* Georgia deliberately: the intro lines premiered in this face before the
+     display webfont chain resolved, and that look is the keeper. */
+  font-family: Georgia, 'Times New Roman', serif;
   font-size: clamp(1.3rem, 3.2vw, 2.4rem);
   font-style: italic;
   color: var(--color-cream, #f0e7d6);

@@ -85,7 +85,7 @@ describe('Navigation', () => {
 
     expect(scrollIntoView).toHaveBeenCalledWith({ behavior: 'smooth' })
     reserveTarget.remove()
-    delete (Element.prototype as Record<string, unknown>).scrollIntoView
+    delete (Element.prototype as unknown as Record<string, unknown>).scrollIntoView
   })
 
   it('ignores clicks whose target section does not exist', () => {

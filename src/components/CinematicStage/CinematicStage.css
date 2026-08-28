@@ -46,7 +46,9 @@
 }
 
 .cinema__hero {
-  animation: cinema-fade-in 1.4s ease both;
+  /* Short fade: a long one leaves the hero text at low opacity for a
+     stretch that WCAG contrast checks (and sharp-eyed visitors) catch. */
+  animation: cinema-fade-in 0.45s ease both;
 }
 
 .cinema__hero-title {

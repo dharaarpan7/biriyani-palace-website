@@ -48,6 +48,20 @@ describe('buildTimeline', () => {
   it('throws on NaN durations', () => {
     expect(() => buildTimeline([10, NaN, 5])).toThrow()
   })
+
+  it('resolveProgress rejects an empty timeline', () => {
+    expect(() => resolveProgress([], 0.5)).toThrow('non-empty timeline')
+  })
+
+  it('activeChapterIndex rejects an empty timeline', () => {
+    expect(() => activeChapterIndex([], 0.5)).toThrow('non-empty timeline')
+  })
+
+  it('holds the last chapter through the end of the film', () => {
+    const segments = buildTimeline([5, 5, 5, 5, 5])
+    expect(activeChapterIndex(segments, 1)).toBe(4)
+    expect(activeChapterIndex(segments, 0.999)).toBe(4)
+  })
 })
 
 describe('resolveProgress', () => {

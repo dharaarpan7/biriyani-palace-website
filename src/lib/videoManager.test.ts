@@ -109,4 +109,16 @@ describe('createVideoManager', () => {
     mgr.seekTo({ clipIndex: 1, localTime: 99 })
     expect(short.currentTime).toBe(4)
   })
+
+  it('refuses to manage an empty video list', () => {
+    expect(() => createVideoManager([])).toThrow('at least one video')
+  })
+
+  it('stops seeking once destroyed — scrub loop is cancelled', () => {
+    const mgr = createVideoManager(videos)
+    mgr.destroy()
+    expect(() => mgr.seekTo({ clipIndex: 0, localTime: 5 })).not.toThrow()
+    // the destroyed manager must not touch the decoder anymore
+    expect(videos[0].currentTime).toBe(0)
+  })
 })

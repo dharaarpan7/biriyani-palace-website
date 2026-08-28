@@ -34,7 +34,8 @@
   font-family: var(--font-sans, sans-serif);
   font-size: 0.72rem;
   letter-spacing: 0.06em;
-  color: rgba(240, 231, 214, 0.45);
+  /* 60% cream on ink ≈ 5.9:1 — WCAG AA for small text */
+  color: rgba(240, 231, 214, 0.6);
   margin: 0 0 1.8rem;
 }
 
@@ -67,7 +68,8 @@
   font-size: 0.62rem;
   letter-spacing: 0.18em;
   text-transform: uppercase;
-  color: rgba(240, 231, 214, 0.4);
+  /* 55% cream on ink ≈ 5.2:1 — WCAG AA for small text */
+  color: rgba(240, 231, 214, 0.55);
   margin-top: 0.3rem;
 }
 
@@ -181,7 +183,8 @@
   font-family: var(--font-sans, sans-serif);
   font-size: 0.62rem;
   letter-spacing: 0.24em;
-  color: rgba(240, 231, 214, 0.4);
+  /* 55% cream on ink ≈ 5.2:1 — WCAG AA for small text */
+  color: rgba(240, 231, 214, 0.55);
   margin: 0;
 }
 

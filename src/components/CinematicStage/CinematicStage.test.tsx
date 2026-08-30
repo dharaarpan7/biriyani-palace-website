@@ -8,9 +8,14 @@ beforeAll(() => {
 
 type ScrollTriggerConfig = {
   onUpdate: (self: { progress: number }) => void
+  anticipatePin?: number
+  invalidateOnRefresh?: boolean
+  [key: string]: unknown
 }
 
 const createdTriggers: { config: ScrollTriggerConfig; kill: ReturnType<typeof vi.fn> }[] = []
+const scrollTriggerRefresh = vi.fn()
+const scrollTriggerConfig = vi.fn()
 
 vi.mock('../../lib/scrollController', () => ({
   createSmoothScroll: vi.fn(),
@@ -20,6 +25,8 @@ vi.mock('../../lib/scrollController', () => ({
       createdTriggers.push({ config, kill })
       return { kill }
     },
+    refresh: (...args: unknown[]) => scrollTriggerRefresh(...args),
+    config: (...args: unknown[]) => scrollTriggerConfig(...args),
   },
 }))
 
@@ -52,6 +59,8 @@ function updateProgress(progress: number): void {
 describe('CinematicStage', () => {
   beforeEach(() => {
     createdTriggers.length = 0
+    scrollTriggerRefresh.mockClear()
+    scrollTriggerConfig.mockClear()
     cleanup()
   })
 
@@ -149,7 +158,10 @@ describe('CinematicStage', () => {
     updateProgress(0.25)
 
     const fill = document.querySelector('.cinema__progress-fill') as HTMLElement
-    expect(fill.style.width).toBe('25%')
+    // scaleX runs on the compositor; writing style.width would force the
+    // browser to re-lay-out the page on every single scroll frame.
+    expect(fill.style.transform).toBe('scaleX(0.25)')
+    expect(fill.style.width).toBe('')
   })
 
   it('reaches the final chapter at the end of the film', () => {
@@ -177,5 +189,210 @@ describe('CinematicStage', () => {
     const trigger = createdTriggers[0]
     unmount()
     expect(trigger.kill).toHaveBeenCalled()
+  })
+})
+
+describe('pinning stability', () => {
+  // A pinned section that measures itself late, or re-measures on every mobile
+  // toolbar resize, jumps under the visitor. These settings are what stop the
+  // stage from lurching at the moment the pin engages.
+  beforeEach(() => {
+    createdTriggers.length = 0
+    scrollTriggerRefresh.mockClear()
+    scrollTriggerConfig.mockClear()
+    cleanup()
+  })
+
+  it('anticipates the pin so the stage does not lurch when it engages', () => {
+    render(<CinematicStage onReady={vi.fn()} />)
+    expect(createdTriggers[0].config.anticipatePin).toBe(1)
+  })
+
+  it('recalculates its own end distance whenever ScrollTrigger refreshes', () => {
+    render(<CinematicStage onReady={vi.fn()} />)
+    expect(createdTriggers[0].config.invalidateOnRefresh).toBe(true)
+  })
+
+  it('ignores mobile toolbar resizes instead of re-pinning mid-scroll', () => {
+    render(<CinematicStage onReady={vi.fn()} />)
+    expect(scrollTriggerConfig).toHaveBeenCalledWith(
+      expect.objectContaining({ ignoreMobileResize: true }),
+    )
+  })
+
+  it('refreshes measurements once the clip durations are known', () => {
+    render(<CinematicStage onReady={vi.fn()} />)
+    const before = scrollTriggerRefresh.mock.calls.length
+    loadAllClips()
+    // the scroll distance depends on the timeline, which only exists after
+    // every clip has reported its duration
+    expect(scrollTriggerRefresh.mock.calls.length).toBeGreaterThan(before)
+  })
+})
+
+/** Replaces currentTime with a counting accessor so seeks can be counted. */
+function countSeeks(video: HTMLVideoElement): { count: number; value: number } {
+  const box = { count: 0, value: video.currentTime || 0 }
+  Object.defineProperty(video, 'currentTime', {
+    configurable: true,
+    get: () => box.value,
+    set: (next: number) => {
+      box.count += 1
+      box.value = next
+    },
+  })
+  return box
+}
+
+describe('frame-accurate scrubbing', () => {
+  // Five 10s clips in the test fixture -> each owns 0.2 of progress, and one
+  // unit of progress is 50s of film. Clip 4 (index 3) runs at 24fps, the rest
+  // at 25fps, exactly as the real film does.
+  beforeEach(() => {
+    createdTriggers.length = 0
+    scrollTriggerRefresh.mockClear()
+    scrollTriggerConfig.mockClear()
+    cleanup()
+  })
+
+  it('lands the scrub on a real frame instead of an arbitrary timestamp', () => {
+    render(<CinematicStage onReady={vi.fn()} />)
+    const videos = loadAllClips()
+    // local 5.037s inside clip 3 sits within frame 125, which starts at 5.00s
+    updateProgress(0.4 + 5.037 / 50)
+    expect(videos[2].currentTime).toBeCloseTo(5, 10)
+  })
+
+  it('asks the decoder once for two positions inside the same frame', () => {
+    render(<CinematicStage onReady={vi.fn()} />)
+    const videos = loadAllClips()
+    const seeks = countSeeks(videos[2])
+
+    updateProgress(0.4 + 5.002 / 50)
+    expect(seeks.count).toBe(1)
+
+    // 35ms later in the film — past the old 1/30s throttle, but still the
+    // same picture, so there is nothing new to decode
+    updateProgress(0.4 + 5.037 / 50)
+    expect(seeks.count).toBe(1)
+    expect(seeks.value).toBeCloseTo(5, 10)
+  })
+
+  it('seeks again as soon as the film moves to the next frame', () => {
+    render(<CinematicStage onReady={vi.fn()} />)
+    const videos = loadAllClips()
+    const seeks = countSeeks(videos[2])
+
+    updateProgress(0.4 + 5.0 / 50)
+    updateProgress(0.4 + 5.04 / 50)
+    expect(seeks.count).toBe(2)
+    expect(seeks.value).toBeCloseTo(5.04, 10)
+  })
+
+  it('uses each clip own frame rate, not one rate for the whole film', () => {
+    render(<CinematicStage onReady={vi.fn()} />)
+    const videos = loadAllClips()
+    // clip 4 (index 3) is 24fps: local 5.05s is frame 121, starting at 121/24
+    updateProgress(0.6 + 5.05 / 50)
+    expect(videos[3].currentTime).toBeCloseTo(121 / 24, 10)
+    expect(videos[3].currentTime).not.toBeCloseTo(5.04, 10)
+  })
+})
+
+describe('scrub instrumentation', () => {
+  // The metrics recorder exists to answer "is it ACTUALLY smooth?" with
+  // numbers from a real browser. The stage arms it only when the visitor
+  // asks for it via ?scrub-debug, so production windows stay clean.
+  type ScrubDebugWindow = Window & { __scrubMetrics?: { snapshot: () => { seeks: number } } }
+
+  beforeEach(() => {
+    createdTriggers.length = 0
+    scrollTriggerRefresh.mockClear()
+    scrollTriggerConfig.mockClear()
+    cleanup()
+    delete (window as ScrubDebugWindow).__scrubMetrics
+    window.history.replaceState(null, '', '/')
+  })
+
+  afterEach(() => {
+    delete (window as ScrubDebugWindow).__scrubMetrics
+    window.history.replaceState(null, '', '/')
+  })
+
+  it('exposes live scrub numbers on window when ?scrub-debug is set', () => {
+    window.history.replaceState(null, '', '?scrub-debug')
+    render(<CinematicStage onReady={vi.fn()} />)
+    loadAllClips()
+    updateProgress(0.5)
+
+    const metrics = (window as ScrubDebugWindow).__scrubMetrics
+    expect(metrics, 'window.__scrubMetrics must be armed').toBeTruthy()
+    // the scroll above handed one seek to the decoder — the recorder saw it
+    expect(metrics!.snapshot().seeks).toBeGreaterThan(0)
+  })
+
+  it('leaves window clean without the debug flag', () => {
+    render(<CinematicStage onReady={vi.fn()} />)
+    loadAllClips()
+    updateProgress(0.5)
+
+    expect((window as ScrubDebugWindow).__scrubMetrics).toBeUndefined()
+  })
+
+  it('withdraws the handle on unmount', () => {
+    window.history.replaceState(null, '', '?scrub-debug')
+    const { unmount } = render(<CinematicStage onReady={vi.fn()} />)
+    loadAllClips()
+    unmount()
+
+    expect((window as ScrubDebugWindow).__scrubMetrics).toBeUndefined()
+  })
+})
+
+describe('boundary crossings', () => {
+  beforeEach(() => {
+    createdTriggers.length = 0
+    scrollTriggerRefresh.mockClear()
+    scrollTriggerConfig.mockClear()
+    cleanup()
+  })
+
+  it('primes the next clip to its first frame before the crossing', () => {
+    render(<CinematicStage onReady={vi.fn()} />)
+    const videos = loadAllClips()
+    updateProgress(0.5)
+    videos[3].currentTime = 7 // left over from an earlier pass through the film
+
+    updateProgress(0.59) // 95% through chapter 3 — the crossing is imminent
+    expect(videos[3].currentTime).toBe(0)
+  })
+
+  it('does not disturb the next clip in the middle of a chapter', () => {
+    render(<CinematicStage onReady={vi.fn()} />)
+    const videos = loadAllClips()
+    updateProgress(0.5)
+    videos[3].currentTime = 7
+
+    updateProgress(0.55) // only 75% through — nothing to prepare yet
+    expect(videos[3].currentTime).toBe(7)
+  })
+
+  it('shows the seeked clip in the same frame, without waiting for React', () => {
+    // React state lands on a later tick. If the visible layer depended on it,
+    // a fast scroll would show the OLD clip holding a stale frame while the
+    // new one is already being scrubbed underneath.
+    const consoleError = vi.spyOn(console, 'error').mockImplementation(() => {})
+    try {
+      render(<CinematicStage onReady={vi.fn()} />)
+      const videos = loadAllClips()
+      const trigger = createdTriggers[createdTriggers.length - 1]
+
+      trigger.config.onUpdate({ progress: 0.5 }) // deliberately NOT inside act()
+
+      expect(videos[2].classList.contains('is-active')).toBe(true)
+      expect(videos[0].classList.contains('is-active')).toBe(false)
+    } finally {
+      consoleError.mockRestore()
+    }
   })
 })

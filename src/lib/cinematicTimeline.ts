@@ -11,20 +11,32 @@ export interface TimelineSegment {
   /** scroll-progress window this clip owns, 0..1 */
   startProgress: number
   endProgress: number
+  /** frames per second of this clip; absent when the frame grid is unknown */
+  fps?: number
 }
 
 export interface TimelinePosition {
   clipIndex: number
   localTime: number
   globalTime: number
+  /** index of the frame on screen; absent when the clip has no known fps */
+  frame?: number
 }
 
-export function buildTimeline(durations: number[]): TimelineSegment[] {
+export function buildTimeline(durations: number[], fps?: number[]): TimelineSegment[] {
   if (!Array.isArray(durations) || durations.length === 0) {
     throw new Error('buildTimeline requires at least one clip duration')
   }
   if (durations.some((d) => !Number.isFinite(d) || d <= 0)) {
     throw new Error('every clip duration must be a positive finite number')
+  }
+  if (fps !== undefined) {
+    if (!Array.isArray(fps) || fps.length !== durations.length) {
+      throw new Error('buildTimeline needs one frame rate per clip duration')
+    }
+    if (fps.some((f) => !Number.isFinite(f) || f <= 0)) {
+      throw new Error('every clip frame rate must be a positive finite number')
+    }
   }
   const total = durations.reduce((sum, d) => sum + d, 0)
   let elapsed = 0
@@ -36,6 +48,7 @@ export function buildTimeline(durations: number[]): TimelineSegment[] {
       endTime: elapsed + duration,
       startProgress: elapsed / total,
       endProgress: (elapsed + duration) / total,
+      fps: fps?.[clipIndex],
     }
     elapsed += duration
     return segment
@@ -45,6 +58,8 @@ export function buildTimeline(durations: number[]): TimelineSegment[] {
 function clamp01(value: number): number {
   return Math.min(1, Math.max(0, value))
 }
+
+const FRAME_EPSILON = 1e-9
 
 export function resolveProgress(
   segments: TimelineSegment[],
@@ -66,11 +81,28 @@ export function resolveProgress(
   }
   const span = segment.endProgress - segment.startProgress
   const local = span === 0 ? 0 : ((p - segment.startProgress) / span) * segment.duration
-  const localTime = Math.min(segment.duration, Math.max(0, local))
+  const continuous = Math.min(segment.duration, Math.max(0, local))
+  // Video is a grid of discrete frames: a 25fps clip only changes picture every
+  // 0.04s. Landing the scrub on the frame that is actually on screen means two
+  // scroll positions inside the same frame become ONE seek instead of two, and
+  // the decoder is never asked for a picture that cannot be seen.
+  const { fps } = segment
+  if (fps === undefined) {
+    return {
+      clipIndex: segment.clipIndex,
+      localTime: continuous,
+      globalTime: segment.startTime + continuous,
+    }
+  }
+  const lastFrame = Math.max(0, Math.ceil(segment.duration * fps) - 1)
+  // EPSILON absorbs float drift so 5.04s * 25 lands on frame 126, not 125.
+  const frame = Math.min(lastFrame, Math.max(0, Math.floor(continuous * fps + FRAME_EPSILON)))
+  const localTime = frame / fps
   return {
     clipIndex: segment.clipIndex,
     localTime,
     globalTime: segment.startTime + localTime,
+    frame,
   }
 }
 

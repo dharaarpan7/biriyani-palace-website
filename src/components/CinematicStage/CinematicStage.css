@@ -18,7 +18,9 @@
   height: 100%;
   object-fit: cover;
   opacity: 0;
-  transition: opacity 0.45s ease;
+  /* Short enough that the crossing is not two 1080p layers compositing for
+     half a second, long enough that the cut is not visible as a cut. */
+  transition: opacity 0.18s ease;
 }
 
 .cinema__video.is-active {
@@ -180,8 +182,12 @@
 .cinema__progress-fill {
   display: block;
   height: 1px;
+  width: 100%;
   background: var(--color-brass, #b08d57);
   transform-origin: left;
+  /* Scrubbed with scaleX from JS — a compositor transform, so the scroll
+     hot path never triggers a layout pass. */
+  transform: scaleX(0);
 }
 
 @keyframes cinema-fade-in {

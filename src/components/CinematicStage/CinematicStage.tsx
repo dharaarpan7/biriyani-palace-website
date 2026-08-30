@@ -2,15 +2,42 @@ import { useEffect, useRef, useState } from 'react'
 import { ScrollTrigger, createSmoothScroll } from '../../lib/scrollController'
 import { buildTimeline, resolveProgress, activeChapterIndex, type TimelineSegment } from '../../lib/cinematicTimeline'
 import { createVideoManager, type ManagedVideo, type VideoManager } from '../../lib/videoManager'
+import { createScrubMetrics, type ScrubMetrics } from '../../lib/scrubMetrics'
 import { CHAPTERS, INTRO_LINES } from '../../data/chapters'
 import { ChapterIndicator } from '../ChapterIndicator/ChapterIndicator'
 import './CinematicStage.css'
 
 const CLIPS = ['clip1.mp4', 'clip2.mp4', 'clip3.mp4', 'clip4.mp4', 'clip5.mp4']
+/** Real frame rate of each clip — the scrub lands on this grid, nothing finer. */
+const CLIP_FPS = [25, 25, 25, 24, 25]
 /** How much scroll distance the whole film occupies (in viewport heights). */
 const SCROLL_LENGTH_VH = 13
-/** Skip seeks smaller than one frame — the decoder is not a toy. */
-const MIN_SEEK_DELTA = 1 / 30
+/** How far into a chapter the next clip gets its first frame decoded. */
+const PRIME_AT = 0.85
+/** URL parameter that arms the scrub metrics handle on window. */
+const SCRUB_DEBUG_PARAM = 'scrub-debug'
+
+type ScrubDebugWindow = Window & { __scrubMetrics?: ScrubMetrics }
+
+/**
+ * Arms `window.__scrubMetrics` so a real browser scroll can be measured:
+ * open the site with ?scrub-debug, scroll the film, then call
+ * `__scrubMetrics.format()` in the console for the gap distribution.
+ * Without the parameter the window stays clean — this is a debug instrument,
+ * not part of the page.
+ */
+function armScrubMetrics(metrics: ScrubMetrics): void {
+  if (typeof window === 'undefined') return
+  if (!new URLSearchParams(window.location.search).has(SCRUB_DEBUG_PARAM)) return
+  ;(window as ScrubDebugWindow).__scrubMetrics = metrics
+  // eslint-disable-next-line no-console
+  console.info('[scrub] metrics armed — scroll the film, then call __scrubMetrics.format()')
+}
+
+function withdrawScrubMetrics(): void {
+  if (typeof window === 'undefined') return
+  delete (window as ScrubDebugWindow).__scrubMetrics
+}
 
 interface CinematicStageProps {
   onReady: () => void
@@ -30,7 +57,7 @@ export function CinematicStage({ onReady }: CinematicStageProps) {
   const managerRef = useRef<VideoManager | null>(null)
   const segmentsRef = useRef<TimelineSegment[]>([])
   const activeChapterRef = useRef(0)
-  const lastSeekRef = useRef({ clipIndex: -1, localTime: -1 })
+  const lastSeekRef = useRef({ clipIndex: -1, frame: -1 })
   const labelsRef = useRef<HTMLDivElement>(null)
   const introRef = useRef<HTMLDivElement>(null)
   const progressFillRef = useRef<HTMLSpanElement>(null)
@@ -65,13 +92,30 @@ export function CinematicStage({ onReady }: CinematicStageProps) {
     paint(introRef.current)
 
     if (progressFillRef.current) {
-      progressFillRef.current.style.width = `${p * 100}%`
+      // scaleX is a compositor transform. Writing style.width instead would
+      // force a layout pass on every scroll frame, for one pixel of bar.
+      progressFillRef.current.style.transform = `scaleX(${p})`
     }
+  }
+
+  /**
+   * Reveals the layer that is being scrubbed, in the SAME frame as the seek.
+   * React state also tracks the chapter (for the copy and the indicator), but
+   * it lands a tick later — too late for the layer showing the picture.
+   */
+  function paintActiveLayer(chapter: number) {
+    videoRefs.current.forEach((video, i) => {
+      if (!video) return
+      video.className = `cinema__video${i === chapter ? ' is-active' : ''}`
+    })
   }
 
   // 1) Smooth scroll + master ScrollTrigger
   useEffect(() => {
     createSmoothScroll()
+    // Mobile browsers fire a resize when the toolbar hides. Re-measuring a
+    // pinned section mid-scroll makes the stage jump under the visitor.
+    ScrollTrigger.config({ ignoreMobileResize: true })
 
     const section = sectionRef.current
     if (!section) return
@@ -81,6 +125,11 @@ export function CinematicStage({ onReady }: CinematicStageProps) {
       start: 'top top',
       end: () => `+=${window.innerHeight * SCROLL_LENGTH_VH}`,
       pin: true,
+      // Measure the pin slightly early so engaging it does not lurch.
+      anticipatePin: 1,
+      // The end distance is computed from the viewport, so it must be
+      // recomputed whenever ScrollTrigger re-measures the page.
+      invalidateOnRefresh: true,
       onUpdate: (self) => {
         const p = self.progress
         const segments = segmentsRef.current
@@ -88,20 +137,29 @@ export function CinematicStage({ onReady }: CinematicStageProps) {
 
         const pos = resolveProgress(segments, p)
 
-        // Throttled seek: only disturb the decoder when the frame actually moved.
+        // One seek per FRAME, not per scroll event: two positions inside the
+        // same frame are the same picture, so the second is free to drop.
+        const frameKey = pos.frame ?? pos.localTime
         const last = lastSeekRef.current
-        if (
-          pos.clipIndex !== last.clipIndex ||
-          Math.abs(pos.localTime - last.localTime) >= MIN_SEEK_DELTA
-        ) {
-          lastSeekRef.current = { clipIndex: pos.clipIndex, localTime: pos.localTime }
+        if (pos.clipIndex !== last.clipIndex || frameKey !== last.frame) {
+          lastSeekRef.current = { clipIndex: pos.clipIndex, frame: frameKey }
           managerRef.current?.seekTo(pos)
           managerRef.current?.preloadNext(pos.clipIndex)
+        }
+
+        // Near the end of a chapter, decode the next clip's first frame so the
+        // crossing reveals a picture instead of a blank or frozen layer.
+        const seg = segments[pos.clipIndex]
+        const span = seg.endProgress - seg.startProgress
+        const localFraction = span === 0 ? 0 : (p - seg.startProgress) / span
+        if (localFraction > PRIME_AT) {
+          managerRef.current?.primeClip(pos.clipIndex + 1)
         }
 
         const chapter = activeChapterIndex(segments, p)
         if (chapter !== activeChapterRef.current) {
           activeChapterRef.current = chapter
+          paintActiveLayer(chapter)
           setActiveChapter(chapter)
         }
 
@@ -127,16 +185,27 @@ export function CinematicStage({ onReady }: CinematicStageProps) {
     const videos = videoRefs.current.filter((v): v is HTMLVideoElement => v !== null)
 
     let cancelled = false
+    // Every clip fires loadedmetadata, but the film is built exactly once —
+    // a second manager would mean a second scrub loop fighting the first.
+    let built = false
 
     function attach() {
-      if (cancelled) return
+      if (cancelled || built) return
       const durations = videos.map((v) => (Number.isFinite(v.duration) ? v.duration : 0))
       if (durations.length === CLIPS.length && durations.every((d) => d > 0)) {
-        segmentsRef.current = buildTimeline(durations)
-        managerRef.current = createVideoManager(videos as unknown as ManagedVideo[])
+        built = true
+        segmentsRef.current = buildTimeline(durations, CLIP_FPS)
+        // The recorder watches the manager from the outside: what the decoder
+        // was asked for, what was dropped, what actually hit the screen.
+        const metrics = createScrubMetrics()
+        managerRef.current = createVideoManager(videos as unknown as ManagedVideo[], { metrics })
+        armScrubMetrics(metrics)
         // The timeline now exists — paint the overlays for the current frame
         // so nothing shows a wrong default before the visitor scrolls.
         paintOverlays(lastSeenProgressRef.current)
+        // The pinned scroll distance depends on the film, which only became
+        // known just now, so make ScrollTrigger measure again.
+        ScrollTrigger.refresh()
         if (!readyRef.current) {
           readyRef.current = true
           onReady()
@@ -153,6 +222,7 @@ export function CinematicStage({ onReady }: CinematicStageProps) {
     return () => {
       cancelled = true
       managerRef.current?.destroy()
+      withdrawScrubMetrics()
     }
   }, [onReady])
 

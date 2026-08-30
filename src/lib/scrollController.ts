@@ -9,15 +9,18 @@ import { ScrollTrigger } from 'gsap/ScrollTrigger'
 gsap.registerPlugin(ScrollTrigger)
 
 let lenis: Lenis | null = null
+/** The exact ticker callback we registered, so destroy can take it back off. */
+let tickerCallback: ((time: number) => void) | null = null
 
 export function createSmoothScroll(): Lenis {
   if (lenis) return lenis
 
   lenis = new Lenis({
-    // Fluid but responsive — long enough to glide, short enough that the
-    // film tracks the visitor's input without trailing behind it.
-    duration: 1,
-    easing: (t: number) => Math.min(1, 1.001 - Math.pow(2, -10 * t)),
+    // A lerp chases the scroll target every single frame. A fixed duration +
+    // easing instead restarts a ~1s animation on every wheel event, so during
+    // a continuous scroll the film is always arriving late — which is exactly
+    // what reads as "not smooth".
+    lerp: 0.1,
     smoothWheel: true,
     touchMultiplier: 1.6,
   })
@@ -25,9 +28,10 @@ export function createSmoothScroll(): Lenis {
   // Drive Lenis from GSAP's ticker so ScrollTrigger and the video scrub
   // stay perfectly in phase.
   lenis.on('scroll', ScrollTrigger.update)
-  gsap.ticker.add((time) => {
+  tickerCallback = (time: number) => {
     lenis?.raf(time * 1000)
-  })
+  }
+  gsap.ticker.add(tickerCallback)
   gsap.ticker.lagSmoothing(0)
 
   return lenis
@@ -38,6 +42,12 @@ export function getLenis(): Lenis | null {
 }
 
 export function destroySmoothScroll(): void {
+  if (tickerCallback) {
+    // Leaving it attached would step a stale Lenis — and step the next one
+    // twice per frame if the stage is ever remounted.
+    gsap.ticker.remove(tickerCallback)
+    tickerCallback = null
+  }
   if (lenis) {
     lenis.destroy()
     lenis = null

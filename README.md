@@ -1,5 +1,7 @@
 # 🍛 Biriyani Palace
 
+https://github.com/user-attachments/assets/e14ec91e-0322-4085-a6d7-345a1397460b
+
 > A cinematic, premium biryani experience brought to life through immersive scroll-driven animations and rich visual storytelling.
 
 **Biriyani Palace** is a premium restaurant website concept built to deliver an immersive digital dining experience. Instead of following a conventional restaurant website layout, the project uses cinematic visuals, smooth scrolling, sophisticated typography, and scroll-controlled animations to turn the entire website into a visual story.

@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react'
 import { ScrollTrigger, createSmoothScroll } from '../../lib/scrollController'
 import { buildTimeline, resolveProgress, activeChapterIndex, type TimelineSegment } from '../../lib/cinematicTimeline'
 import { createVideoManager, type ManagedVideo, type VideoManager } from '../../lib/videoManager'
+import { createVideoPreloadChain, type VideoPreloadChain } from '../../lib/videoPreloadChain'
 import { createScrubMetrics, type ScrubMetrics } from '../../lib/scrubMetrics'
 import { CHAPTERS, INTRO_LINES } from '../../data/chapters'
 import { ChapterIndicator } from '../ChapterIndicator/ChapterIndicator'
@@ -55,6 +56,7 @@ export function CinematicStage({ onReady }: CinematicStageProps) {
   const sectionRef = useRef<HTMLElement>(null)
   const videoRefs = useRef<(HTMLVideoElement | null)[]>([])
   const managerRef = useRef<VideoManager | null>(null)
+  const preloadChainRef = useRef<VideoPreloadChain | null>(null)
   const segmentsRef = useRef<TimelineSegment[]>([])
   const activeChapterRef = useRef(0)
   const lastSeekRef = useRef({ clipIndex: -1, frame: -1 })
@@ -144,7 +146,9 @@ export function CinematicStage({ onReady }: CinematicStageProps) {
         if (pos.clipIndex !== last.clipIndex || frameKey !== last.frame) {
           lastSeekRef.current = { clipIndex: pos.clipIndex, frame: frameKey }
           managerRef.current?.seekTo(pos)
-          managerRef.current?.preloadNext(pos.clipIndex)
+          // The clip on screen is the one the visitor needs now — stage it
+          // even if the download chain has not reached it yet.
+          preloadChainRef.current?.prioritize(pos.clipIndex)
         }
 
         // Near the end of a chapter, decode the next clip's first frame so the
@@ -200,6 +204,9 @@ export function CinematicStage({ onReady }: CinematicStageProps) {
         const metrics = createScrubMetrics()
         managerRef.current = createVideoManager(videos as unknown as ManagedVideo[], { metrics })
         armScrubMetrics(metrics)
+        // The film is assembled — start walking the download chain so the
+        // next clip begins only when the current one is entirely local.
+        preloadChainRef.current = createVideoPreloadChain(videos)
         // The timeline now exists — paint the overlays for the current frame
         // so nothing shows a wrong default before the visitor scrolls.
         paintOverlays(lastSeenProgressRef.current)
@@ -222,6 +229,8 @@ export function CinematicStage({ onReady }: CinematicStageProps) {
     return () => {
       cancelled = true
       managerRef.current?.destroy()
+      preloadChainRef.current?.destroy()
+      preloadChainRef.current = null
       withdrawScrubMetrics()
     }
   }, [onReady])
@@ -242,7 +251,10 @@ export function CinematicStage({ onReady }: CinematicStageProps) {
             src={`/videos/${clip}`}
             muted
             playsInline
-            preload={i < 2 ? 'auto' : 'metadata'}
+            // Only the opening clip asks for data at page load — the chain
+            // stages the rest one at a time so the first download owns the
+            // connection instead of fighting four others for it.
+            preload={i === 0 ? 'auto' : 'metadata'}
             // The film never plays itself — scroll is the projector.
             autoPlay={false}
             aria-hidden="true"

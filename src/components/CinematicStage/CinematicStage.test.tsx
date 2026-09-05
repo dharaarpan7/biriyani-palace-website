@@ -349,6 +349,70 @@ describe('scrub instrumentation', () => {
   })
 })
 
+/** Pretends the browser has downloaded [start, end] of the clip. */
+function fillBuffer(video: HTMLVideoElement, start: number, end: number): void {
+  Object.defineProperty(video, 'buffered', {
+    configurable: true,
+    value: { length: 1, start: () => start, end: () => end },
+  })
+}
+
+describe('cold-start download order', () => {
+  // A first visit downloads ~73 MB of film. The old behaviour fetched clips
+  // 1 and 2 together (they fought for bandwidth) and fetched 3–5 only once
+  // the visitor arrived at them (scrubbing raced the download). The chain
+  // walks the film in order instead: one download owns the connection, and
+  // each clip is finished before the scroll reaches it.
+  beforeEach(() => {
+    createdTriggers.length = 0
+    scrollTriggerRefresh.mockClear()
+    scrollTriggerConfig.mockClear()
+    cleanup()
+  })
+
+  it('lets only the opening clip download at page load', () => {
+    render(<CinematicStage onReady={vi.fn()} />)
+    const videos = Array.from(
+      document.querySelectorAll<HTMLVideoElement>('video.cinema__video'),
+    )
+    expect(videos[0].getAttribute('preload')).toBe('auto')
+    videos.slice(1).forEach((v) => expect(v.getAttribute('preload')).toBe('metadata'))
+  })
+
+  it('stages the second clip only after the first is fully downloaded', () => {
+    render(<CinematicStage onReady={vi.fn()} />)
+    const videos = loadAllClips()
+
+    // part-way through the first clip's download — the second stays lazy
+    fillBuffer(videos[0], 0, 4)
+    act(() => {
+      videos[0].dispatchEvent(new Event('progress'))
+    })
+    expect(videos[1].getAttribute('preload')).toBe('metadata')
+
+    // the first clip is entirely on the machine — the second may begin
+    fillBuffer(videos[0], 0, 10)
+    act(() => {
+      videos[0].dispatchEvent(new Event('progress'))
+    })
+    expect(videos[1].getAttribute('preload')).toBe('auto')
+    // and the third still waits its turn
+    expect(videos[2].getAttribute('preload')).toBe('metadata')
+  })
+
+  it('stages the clip being scrubbed even if the chain has not reached it', () => {
+    render(<CinematicStage onReady={vi.fn()} />)
+    const videos = loadAllClips()
+
+    // a fast scroller jumps into chapter 3 while nothing has downloaded
+    updateProgress(0.5)
+    expect(videos[2].getAttribute('preload')).toBe('auto')
+    // the clips around it stay lazy
+    expect(videos[1].getAttribute('preload')).toBe('metadata')
+    expect(videos[3].getAttribute('preload')).toBe('metadata')
+  })
+})
+
 describe('boundary crossings', () => {
   beforeEach(() => {
     createdTriggers.length = 0

@@ -1,8 +1,8 @@
 // Scroll-scrubbed video control. The videos NEVER play on their own:
 // every frame the visitor sees is the direct result of scroll position.
-// The manager keeps every clip paused, coalesces seeks so the decoder
-// always chases the NEWEST requested position (never a backlog), and
-// upgrades the preload level of the next clip before a boundary crossing.
+// The manager keeps every clip paused and coalesces seeks so the decoder
+// always chases the NEWEST requested position (never a backlog). Download
+// staging lives in videoPreloadChain — the manager only scrubs.
 
 export interface ManagedVideo {
   paused: boolean
@@ -51,7 +51,6 @@ export interface VideoManagerOptions {
 
 export interface VideoManager {
   seekTo(seek: TimelineSeek): void
-  preloadNext(activeIndex: number): void
   /** decodes the first frame of an upcoming clip so it is never blank on arrival */
   primeClip(index: number): void
   pauseAll(): void
@@ -177,13 +176,6 @@ export function createVideoManager(videos: ManagedVideo[], options: VideoManager
         inFlightTicks = 0
       }
       drain()
-    },
-
-    preloadNext(current: number): void {
-      const next = videos[current + 1]
-      if (next) {
-        next.preload = 'auto'
-      }
     },
 
     primeClip(index: number): void {

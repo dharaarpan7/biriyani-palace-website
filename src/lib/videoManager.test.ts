@@ -70,23 +70,6 @@ describe('createVideoManager', () => {
     videos.forEach((v) => expect(v.paused).toBe(true))
   })
 
-  it('preloadNext upgrades the next clip preload level before the boundary', () => {
-    const lazy = fakeVideo({ preload: 'none' })
-    const vids = [lazy, fakeVideo({ preload: 'none' }), fakeVideo({ preload: 'none' })]
-    const mgr = createVideoManager(vids)
-    mgr.preloadNext(0)
-    expect(vids[1].preload).toBe('auto')
-    // clip beyond next stays lazy
-    expect(vids[2].preload).toBe('none')
-  })
-
-  it('preloadNext on the last clip is a no-op', () => {
-    const vids = [fakeVideo(), fakeVideo()]
-    const mgr = createVideoManager(vids)
-    expect(() => mgr.preloadNext(1)).not.toThrow()
-    expect(vids[0].preload).toBe('auto') // untouched from registration default
-  })
-
   it('pauseAll pauses any video that somehow started playing', () => {
     const rogue = fakeVideo({ paused: false })
     const vids = [fakeVideo(), rogue]
